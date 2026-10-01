@@ -89,8 +89,12 @@
           <h5 class="modal-title font-weight-bold">Select Uniform Size</h5>
         </div>
         <div class="modal-body">
-          <p class="text-muted small mb-1">Employee: <strong id="modalEmpId" class="text-dark"></strong></p>
-          <label class="small font-weight-bold text-muted">Quick Select:</label>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div>Employee: <strong id="modalEmpId" class="text-dark"></strong></div>
+            <span class="badge badge-primary px-2 py-1" id="modalUniformBadge">1st Uniform</span>
+          </div>
+          <div id="modalPreviousSizeAlert" class="small text-muted mb-2 font-weight-bold" style="display:none;"></div>
+          <label class="small font-weight-bold text-muted">Quick Select Size:</label>
           <div class="size-grid">
             <button type="button" class="size-btn" onclick="pickSize('XS')">XS</button>
             <button type="button" class="size-btn" onclick="pickSize('S')">S</button>
@@ -101,13 +105,13 @@
             <button type="button" class="size-btn" onclick="pickSize('3XL')">3XL</button>
             <button type="button" class="size-btn" onclick="pickSize('4XL')">4XL</button>
           </div>
-          <label class="small font-weight-bold text-muted">Or Type:</label>
-          <input type="text" id="sizeInput" class="form-control text-uppercase" placeholder="e.g. M or 38">
+          <label class="small font-weight-bold text-muted">Or Type Custom Size:</label>
+          <input type="text" id="sizeInput" class="form-control text-uppercase font-weight-bold" placeholder="Type size (e.g. S, M, 38)">
           <input type="hidden" id="hiddenCode">
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" id="cancelSizeBtn">Cancel</button>
-          <button type="button" id="submitSizeBtn" class="btn btn-primary font-weight-bold">Confirm</button>
+          <button type="button" id="submitSizeBtn" class="btn btn-primary font-weight-bold">Confirm & Issue</button>
         </div>
       </div>
     </div>
@@ -240,9 +244,9 @@
         return;
       }
 
-      // SINGLE API call: scanEmployee does size check + uniform issuance in ONE request
-      var cachedSize = sizeCache[code] || "";
-      api({ action: "scanEmployee", employeeId: code, size: cachedSize })
+      // 1. Initial scan: Send size="" to verify eligibility & wait periods
+      // Backend will return needSize: true along with existingSize and uniformNumber
+      api({ action: "scanEmployee", employeeId: code, size: "" })
         .then(function(d) {
           if (d.error) {
             showMsg("Error: " + d.error);
@@ -251,22 +255,33 @@
             return;
           }
 
-          // Backend says it needs a size (not in sheet, not cached)
+          // 2. Eligible for Uniform -> ALWAYS POPUP SIZE MODAL!
           if (d.needSize) {
             document.getElementById("hiddenCode").value = code;
             document.getElementById("modalEmpId").textContent = code;
-            document.getElementById("sizeInput").value = "";
-            var btns = document.querySelectorAll(".size-btn");
-            for (var i = 0; i < btns.length; i++) btns[i].classList.remove("active");
+
+            var un = d.uniformNumber || 1;
+            var unSuffix = (un === 1 ? "1st" : (un === 2 ? "2nd" : "3rd"));
+            document.getElementById("modalUniformBadge").textContent = unSuffix + " Uniform";
+
+            var prevAlert = document.getElementById("modalPreviousSizeAlert");
+            if (d.existingSize) {
+              prevAlert.textContent = "Current size in sheet: " + d.existingSize + " (Tap to change or Confirm)";
+              prevAlert.style.display = "block";
+              pickSize(d.existingSize);
+            } else {
+              prevAlert.style.display = "none";
+              document.getElementById("sizeInput").value = "";
+              var btns = document.querySelectorAll(".size-btn");
+              for (var i = 0; i < btns.length; i++) btns[i].classList.remove("active");
+            }
+
             $("#sizeModal").modal("show");
             return;
           }
 
-          // Cache the size for future scans
-          if (d.size) sizeCache[code] = d.size;
-
-          // Handle result
-          handleResult(code, d.result, d.size || "");
+          // 3. Not eligible, blocked, or all received -> Show status directly
+          handleResult(code, d.result, d.size || "", d.daysRemaining);
           setTimeout(resetBusy, 600);
         })
         .catch(function(e) {
@@ -276,11 +291,10 @@
         });
     }
 
-    // Called when size modal submits — sends scanEmployee with the chosen size
+    // Called when size modal confirms — sends scanEmployee with the confirmed/chosen size
     function submitWithSize(code, size) {
-      showMsg("Processing " + code + "...", 1500);
+      showMsg("Processing " + code + " (" + size + ")...", 1500);
       busy = true;
-      sizeCache[code] = size;
 
       api({ action: "scanEmployee", employeeId: code, size: size })
         .then(function(d) {
@@ -288,8 +302,7 @@
             showMsg("Error: " + d.error);
             addToHistory(code, d.error, "scan-danger");
           } else {
-            if (d.size) sizeCache[code] = d.size;
-            handleResult(code, d.result, d.size || size);
+            handleResult(code, d.result, d.size || size, d.daysRemaining);
           }
         })
         .catch(function(e) {
@@ -301,22 +314,24 @@
         });
     }
 
-    function handleResult(code, r, size) {
+    function handleResult(code, r, size, daysRemaining) {
       if (r === "FirstUniformGiven") {
         showMsg(code + " - 1st Uniform Issued (" + size + ")");
         addToHistory(code, "1st Uniform (" + size + ")", "scan-success");
       } else if (r === "SecondUniformGiven") {
-        showMsg(code + " - 2nd Uniform Issued");
-        addToHistory(code, "2nd Uniform", "scan-success");
+        showMsg(code + " - 2nd Uniform Issued (" + size + ")");
+        addToHistory(code, "2nd Uniform (" + size + ")", "scan-success");
       } else if (r === "ThirdUniformGiven") {
-        showMsg(code + " - 3rd Uniform Issued");
-        addToHistory(code, "3rd Uniform", "scan-success");
+        showMsg(code + " - 3rd Uniform Issued (" + size + ")");
+        addToHistory(code, "3rd Uniform (" + size + ")", "scan-success");
       } else if (r === "BlockedFromSecondUniform") {
-        showMsg(code + " - Wait period not reached for 2nd uniform");
-        addToHistory(code, "Blocked (wait period)", "scan-warning");
+        var waitTxt = daysRemaining ? "Wait " + daysRemaining + " more days" : "Wait period active";
+        showMsg(code + " - Wait period not reached (" + waitTxt + ")");
+        addToHistory(code, "Blocked (" + waitTxt + ")", "scan-warning");
       } else if (r === "BlockedFromThirdUniform") {
-        showMsg(code + " - Wait period not reached for 3rd uniform");
-        addToHistory(code, "Blocked (wait period)", "scan-warning");
+        var waitTxt = daysRemaining ? "Wait " + daysRemaining + " more days" : "Wait period active";
+        showMsg(code + " - Wait period not reached (" + waitTxt + ")");
+        addToHistory(code, "Blocked (" + waitTxt + ")", "scan-warning");
       } else if (r === "AllUniformsReceived") {
         showMsg(code + " - Already received all uniforms!");
         addToHistory(code, "All received", "scan-warning");
