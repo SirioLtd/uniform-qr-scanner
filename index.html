@@ -151,15 +151,18 @@
     var rules = { waitingDays: 7, maxEmployeeId: 25025 };
     var history = [];
     var busy = false;
+    var scanCooldown = {};  // prevents duplicate scans: { "S23302": timestamp }
+    var sizeCache = {};     // caches known sizes: { "S23302": "M" }
+    var COOLDOWN_MS = 10000; // 10 seconds between same ID scans
 
     function api(payload) {
       return fetch(API_URL, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify(payload) }).then(function(r) { return r.json(); });
     }
 
-    function showMsg(msg) {
+    function showMsg(msg, duration) {
       var el = document.getElementById("popup-message");
       el.textContent = msg; el.style.display = "block";
-      setTimeout(function() { el.style.display = "none"; }, 3500);
+      setTimeout(function() { el.style.display = "none"; }, duration || 2500);
     }
 
     function addHistory(id, text, cls) {
@@ -186,25 +189,41 @@
       if (busy) return;
       var code = String(decoded).trim().toUpperCase();
       if (!code) return;
+
+      // Duplicate scan prevention: same ID within cooldown period
+      var now = Date.now();
+      if (scanCooldown[code] && (now - scanCooldown[code]) < COOLDOWN_MS) return;
+      scanCooldown[code] = now;
       busy = true;
+
+      // Show instant feedback
+      showMsg("Processing " + code + "...", 1500);
 
       if (rules.maxEmployeeId > 0 && extractNum(code) > rules.maxEmployeeId) {
         showMsg("Not Eligible! " + code + " exceeds limit (" + rules.maxEmployeeId + ")");
         addHistory(code, "Not Eligible", "scan-danger");
-        setTimeout(function() { busy = false; }, 2000);
+        setTimeout(function() { busy = false; }, 800);
+        return;
+      }
+
+      // Check local size cache first to skip extra API call
+      if (sizeCache[code]) {
+        save(code, sizeCache[code]);
         return;
       }
 
       api({ action: "getSizeForEmployee", employeeId: code }).then(function(d) {
-        if (d && d.size) { save(code, d.size); }
-        else {
+        if (d && d.size) {
+          sizeCache[code] = d.size; // cache for future
+          save(code, d.size);
+        } else {
           document.getElementById("hiddenCode").value = code;
           document.getElementById("modalEmpId").textContent = code;
           document.getElementById("sizeInput").value = "";
           document.querySelectorAll(".size-btn").forEach(function(b) { b.classList.remove("active"); });
           $("#sizeModal").modal("show");
         }
-      }).catch(function(e) { showMsg("Error: " + e.message); setTimeout(function() { busy = false; }, 2000); });
+      }).catch(function(e) { showMsg("Error: " + e.message); setTimeout(function() { busy = false; }, 800); });
     }
 
     function save(code, size) {
@@ -219,7 +238,7 @@
         else if (r === "NotEligible") { showMsg(code + " - Not Eligible"); addHistory(code, "Not Eligible", "scan-danger"); }
         else { showMsg(r || "Error"); addHistory(code, r, "scan-warning"); }
       }).catch(function(e) { showMsg("Error: " + e.message); })
-      .finally(function() { setTimeout(function() { busy = false; }, 1500); });
+      .finally(function() { setTimeout(function() { busy = false; }, 600); });
     }
 
     function updateBadges() {
@@ -236,7 +255,7 @@
       }).catch(function() {});
 
       // QR Scanner
-      new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: 250 }).render(onScan, function() {});
+      new Html5QrcodeScanner("qr-reader", { fps: 15, qrbox: 250 }).render(onScan, function() {});
 
       // Settings
       document.getElementById("openSettingsBtn").addEventListener("click", function() {
