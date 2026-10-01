@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>QR Code Scanner</title>
+
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" />
+
+  <style>
+    .scan-success {
+      background-color: #d4edda;
+      border-color: #c3e6cb;
+      color: #155724;
+    }
+    .scan-danger {
+      background-color: #f8d7da;
+      border-color: #f5c6cb;
+      color: #721c24;
+    }
+    .popup-message {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 15px 25px;
+      background-color: #ffc107;
+      color: #333;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      text-align: center;
+      z-index: 9999;
+      display: none;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      max-width: 90%;
+    }
+    .setup-banner {
+      background: #fff3cd;
+      border: 1px solid #ffeeba;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #856404;
+      margin-bottom: 15px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container mt-4 position-relative" style="max-width: 600px;">
+
+    <!-- Setup warning if API URL not configured -->
+    <div id="setupBanner" class="setup-banner text-center">
+      <strong>⚠️ API URL not set!</strong><br>
+      Open this HTML file and set the <code>API_URL</code> variable to your Apps Script deployment URL.
+    </div>
+
+    <!-- Original QR Reader Box -->
+    <div id="qr-reader" class="card p-3 mb-3">
+    </div>
+
+    <!-- Popup Notification -->
+    <div id="popup-message" class="popup-message"></div>
+
+    <!-- Scanned Results Queue -->
+    <div id="qr-reader-results" class="card p-3 mb-3">
+    </div>
+
+    <!-- Manual Entry -->
+    <div class="card p-3 mb-4">
+      <label class="small font-weight-bold text-muted mb-1">Manual ID Entry (If QR fails):</label>
+      <div class="input-group">
+        <input type="text" id="manualInput" class="form-control text-uppercase" placeholder="e.g. S23302">
+        <div class="input-group-append">
+          <button class="btn btn-secondary" id="manualSubmitBtn" type="button">Submit</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Size Modal -->
+  <div class="modal fade" id="sizeModal" tabindex="-1" role="dialog" data-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title font-weight-bold">Enter Uniform Size</h5>
+        </div>
+        <div class="modal-body">
+          <input type="text" id="uniformSizeInput" class="form-control mb-2" placeholder="Enter size (e.g. S, M, L, XL)">
+          <input type="hidden" id="hiddenScannedCode">
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="submitSizeBtn" class="btn btn-primary font-weight-bold">Submit</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <script>
+    // ============================================================
+    // ⬇️⬇️⬇️  CHANGE THIS TO YOUR APPS SCRIPT DEPLOYMENT URL  ⬇️⬇️⬇️
+    // ============================================================
+    var API_URL = "PASTE_YOUR_APPS_SCRIPT_URL_HERE";
+    // Example: "https://script.google.com/macros/s/AKfycb.../exec"
+    // ============================================================
+
+    var resultContainer, popupMessage;
+    var scannedResults = {};
+    var scanQueue = [];
+    var currentRules = { waitingDays: 7, maxEmployeeId: 25025 };
+
+    // Call Apps Script API via fetch POST
+    function callAPI(payload) {
+      return fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify(payload)
+      })
+      .then(function(resp) { return resp.json(); });
+    }
+
+    function addScanResult(decodedText, className) {
+      scanQueue.unshift({ text: decodedText, className: className });
+      if (scanQueue.length > 5) scanQueue.pop();
+      renderScanResults();
+    }
+
+    function renderScanResults() {
+      resultContainer.innerHTML = '';
+      for (var i = 0; i < scanQueue.length; i++) {
+        var scan = scanQueue[i];
+        resultContainer.innerHTML += '<div class="alert ' + scan.className + ' py-2 mb-2">' + scan.text + '</div>';
+      }
+    }
+
+    function extractNumericId(str) {
+      var digits = String(str).replace(/\D/g, '');
+      return digits ? parseInt(digits, 10) : 0;
+    }
+
+    function checkSizeAndProceed(decodedText) {
+      callAPI({ action: "getSizeForEmployee", employeeId: decodedText })
+        .then(function(data) {
+          if (data.size) {
+            addScanResult(decodedText, 'scan-success');
+            saveScannedData(decodedText, data.size);
+          } else {
+            document.getElementById("hiddenScannedCode").value = decodedText;
+            document.getElementById("uniformSizeInput").value = "";
+            $('#sizeModal').modal('show');
+          }
+        })
+        .catch(function(err) {
+          showMessage("API Error: " + err.message);
+        });
+    }
+
+    function onScanSuccess(decodedText) {
+      var cleanCode = String(decodedText).trim().toUpperCase();
+
+      // Max Employee ID check
+      if (currentRules.maxEmployeeId > 0) {
+        var num = extractNumericId(cleanCode);
+        if (num > currentRules.maxEmployeeId) {
+          showMessage("Not Eligible! Employee ID " + cleanCode + " exceeds limit (" + currentRules.maxEmployeeId + ").");
+          addScanResult(cleanCode + " - Not Eligible", 'scan-danger');
+          return;
+        }
+      }
+
+      if (!scannedResults.hasOwnProperty(cleanCode)) {
+        scannedResults[cleanCode] = 1;
+        checkSizeAndProceed(cleanCode);
+      } else {
+        scannedResults[cleanCode]++;
+        checkSizeAndProceed(cleanCode);
+      }
+    }
+
+    function saveScannedData(scannedText, size) {
+      var formObject = { productCode: scannedText, size: size };
+
+      callAPI({ action: "processForm", formObject: formObject })
+        .then(function(data) {
+          var response = data.result;
+          if (response === "BlockedFromSecondUniform") {
+            showMessage("You have already received your first uniform. You can get your second uniform after the waiting period.");
+          } else if (response === "BlockedFromThirdUniform") {
+            showMessage("You have already received your second uniform. You can get your third uniform after the waiting period.");
+          } else if (response === "FirstUniformGiven") {
+            showMessage("This is your 1st uniform.");
+          } else if (response === "SecondUniformGiven") {
+            showMessage("This is your 2nd uniform.");
+          } else if (response === "ThirdUniformGiven") {
+            showMessage("You have received your 3rd uniform.");
+          } else if (response === "AllUniformsReceived") {
+            showMessage("You have already received all uniforms.");
+          } else if (response === "NotEligible") {
+            showMessage("Not Eligible! Employee ID exceeds limit.");
+          } else {
+            showMessage(response || "Error processing form.");
+          }
+        })
+        .catch(function(err) {
+          showMessage("API Error: " + err.message);
+        });
+    }
+
+    function showMessage(message) {
+      popupMessage.textContent = message;
+      popupMessage.style.display = 'block';
+      setTimeout(function() {
+        popupMessage.style.display = 'none';
+      }, 3500);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      resultContainer = document.getElementById('qr-reader-results');
+      popupMessage = document.getElementById('popup-message');
+
+      // Check API URL
+      if (!API_URL || API_URL === "PASTE_YOUR_APPS_SCRIPT_URL_HERE") {
+        document.getElementById("setupBanner").style.display = "block";
+      }
+
+      // Load settings from backend
+      if (API_URL && API_URL !== "PASTE_YOUR_APPS_SCRIPT_URL_HERE") {
+        callAPI({ action: "getSettings" })
+          .then(function(data) {
+            if (data && data.waitingDays !== undefined) {
+              currentRules = data;
+            }
+          })
+          .catch(function(err) {
+            console.warn("Failed to load settings:", err);
+          });
+      }
+
+      // Original exact scanner - renders its own camera selection UI
+      var html5QrcodeScanner = new Html5QrcodeScanner(
+        "qr-reader", { fps: 10, qrbox: 250 });
+
+      html5QrcodeScanner.render(onScanSuccess, function(err) {
+        // scan frame error - normal
+      });
+
+      // Submit size from modal
+      document.getElementById("submitSizeBtn").addEventListener("click", function () {
+        var size = document.getElementById("uniformSizeInput").value.trim();
+        var scannedCode = document.getElementById("hiddenScannedCode").value;
+        if (!size) { alert("Please enter a size."); return; }
+        $('#sizeModal').modal('hide');
+        addScanResult(scannedCode, 'scan-success');
+        saveScannedData(scannedCode, size);
+      });
+
+      // Manual input
+      document.getElementById("manualSubmitBtn").addEventListener("click", function() {
+        var val = document.getElementById("manualInput").value.trim();
+        if (val) { onScanSuccess(val); document.getElementById("manualInput").value = ""; }
+      });
+      document.getElementById("manualInput").addEventListener("keypress", function(e) {
+        if (e.key === "Enter") document.getElementById("manualSubmitBtn").click();
+      });
+    });
+  </script>
+</body>
+</html>
