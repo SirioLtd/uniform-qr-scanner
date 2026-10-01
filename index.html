@@ -2,98 +2,454 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>QR Code Scanner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Uniform Issuance QR Scanner</title>
 
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome & Bootstrap 4 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" />
 
   <style>
-    .scan-success {
-      background-color: #d4edda;
-      border-color: #c3e6cb;
-      color: #155724;
+    :root {
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --success: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --bg: #0f172a;
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
     }
-    .scan-danger {
-      background-color: #f8d7da;
-      border-color: #f5c6cb;
-      color: #721c24;
+
+    * {
+      box-sizing: border-box;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
-    .popup-message {
+
+    body {
+      background: radial-gradient(circle at top, #1e1b4b 0%, #0f172a 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding-bottom: 40px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Glassmorphism Containers */
+    .glass-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Header Styling */
+    .app-header {
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .app-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+    }
+
+    .app-title i {
+      color: #6366f1;
+      font-size: 1.3rem;
+    }
+
+    .badge-rule {
+      background: rgba(99, 102, 241, 0.15);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      padding: 5px 12px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .badge-rule.online {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+
+    /* Scanner Viewport */
+    #qr-reader {
+      border: none !important;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #000 !important;
+    }
+
+    #qr-reader__scan_region {
+      background: #000;
+      border-radius: 12px;
+    }
+
+    #qr-reader__dashboard_section_csr button,
+    #qr-reader__dashboard_section_swaplink {
+      background: #4f46e5 !important;
+      color: white !important;
+      border: none !important;
+      border-radius: 8px !important;
+      padding: 8px 16px !important;
+      font-size: 14px !important;
+      font-weight: 600 !important;
+      margin: 4px !important;
+      cursor: pointer;
+    }
+
+    #qr-reader__dashboard_section_csr select {
+      background: #1e293b !important;
+      color: white !important;
+      border: 1px solid #334155 !important;
+      border-radius: 8px !important;
+      padding: 6px 12px !important;
+    }
+
+    /* Big Status Alert Overlay */
+    .status-toast {
       position: fixed;
-      top: 50%;
+      top: 24px;
       left: 50%;
-      transform: translate(-50%, -50%);
-      padding: 15px 25px;
-      background-color: #ffc107;
-      color: #333;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      font-size: 16px;
-      font-weight: bold;
-      text-align: center;
-      z-index: 9999;
-      display: none;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      transform: translateX(-50%) translateY(-100px);
+      min-width: 320px;
       max-width: 90%;
+      padding: 16px 20px;
+      border-radius: 14px;
+      font-weight: 700;
+      font-size: 1rem;
+      text-align: center;
+      z-index: 10000;
+      transition: transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s;
+      opacity: 0;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
     }
-    .setup-banner {
-      background: #fff3cd;
-      border: 1px solid #ffeeba;
-      padding: 12px;
-      border-radius: 8px;
-      font-size: 13px;
-      color: #856404;
-      margin-bottom: 15px;
-      display: none;
+
+    .status-toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    .status-toast.toast-success {
+      background: linear-gradient(135deg, #059669, #10b981);
+      color: white;
+      border: 1px solid #34d399;
+    }
+
+    .status-toast.toast-warning {
+      background: linear-gradient(135deg, #d97706, #f59e0b);
+      color: white;
+      border: 1px solid #fbbf24;
+    }
+
+    .status-toast.toast-danger {
+      background: linear-gradient(135deg, #dc2626, #ef4444);
+      color: white;
+      border: 1px solid #f87171;
+    }
+
+    /* Result History List */
+    .scan-history-item {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-left: 4px solid var(--primary);
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    .scan-history-item.item-success { border-left-color: var(--success); }
+    .scan-history-item.item-warning { border-left-color: var(--warning); }
+    .scan-history-item.item-danger { border-left-color: var(--danger); }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Quick Size Selector Pills */
+    .size-pill-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 12px;
+      margin-bottom: 16px;
+    }
+
+    .size-pill-btn {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+      padding: 12px 0;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: center;
+    }
+
+    .size-pill-btn:hover, .size-pill-btn:active, .size-pill-btn.active {
+      background: var(--primary);
+      border-color: #818cf8;
+      color: #fff;
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+    }
+
+    /* Custom Form Inputs */
+    .custom-input {
+      background: rgba(15, 23, 42, 0.8) !important;
+      border: 1px solid rgba(255, 255, 255, 0.15) !important;
+      color: #fff !important;
+      border-radius: 10px !important;
+      padding: 12px 14px !important;
+      font-size: 1rem;
+    }
+
+    .custom-input:focus {
+      border-color: #818cf8 !important;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25) !important;
+    }
+
+    /* Settings Modal Custom Dark Theme */
+    .modal-content.dark-modal {
+      background: #1e293b;
+      color: #f8fafc;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 18px;
+    }
+
+    .modal-content.dark-modal .modal-header {
+      border-bottom: 1px solid #334155;
+    }
+
+    .modal-content.dark-modal .modal-footer {
+      border-top: 1px solid #334155;
+    }
+
+    .btn-gradient {
+      background: linear-gradient(135deg, #4f46e5, #6366f1);
+      color: white;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 20px;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+      transition: all 0.2s;
+    }
+
+    .btn-gradient:hover {
+      background: linear-gradient(135deg, #4338ca, #4f46e5);
+      color: white;
+      transform: translateY(-1px);
+    }
+
+    .btn-settings {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #cbd5e1;
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .btn-settings:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
     }
   </style>
 </head>
 <body>
-  <div class="container mt-4 position-relative" style="max-width: 600px;">
 
-    <!-- Setup warning if API URL not configured -->
-    <div id="setupBanner" class="setup-banner text-center">
-      <strong>⚠️ API URL not set!</strong><br>
-      Open this HTML file and set the <code>API_URL</code> variable to your Apps Script deployment URL.
+  <!-- Top Floating Toast Notification -->
+  <div id="statusToast" class="status-toast toast-success">
+    <i id="toastIcon" class="fa-solid fa-circle-check"></i>
+    <span id="toastText">Ready</span>
+  </div>
+
+  <div class="container mt-3" style="max-width: 620px;">
+
+    <!-- Header & Live Rules -->
+    <header class="glass-card app-header">
+      <div>
+        <h1 class="app-title">
+          <i class="fa-solid fa-qrcode"></i>
+          Uniform Scanner
+        </h1>
+        <div class="mt-2 d-flex flex-wrap gap-2">
+          <span class="badge-rule online" id="statusBadge">
+            <i class="fa-solid fa-circle text-success" style="font-size: 8px;"></i>
+            Connected
+          </span>
+          <span class="badge-rule" id="maxIdBadge">
+            <i class="fa-solid fa-shield-halved"></i>
+            Max ID: <strong>25025</strong>
+          </span>
+          <span class="badge-rule" id="waitDaysBadge">
+            <i class="fa-solid fa-clock"></i>
+            Wait: <strong>7 Days</strong>
+          </span>
+        </div>
+      </div>
+      <button class="btn-settings" id="openSettingsBtn" type="button">
+        <i class="fa-solid fa-sliders"></i>
+        <span>Settings</span>
+      </button>
+    </header>
+
+    <!-- QR Camera Card -->
+    <div class="glass-card p-3 mb-3">
+      <div id="qr-reader"></div>
     </div>
 
-    <!-- Original QR Reader Box -->
-    <div id="qr-reader" class="card p-3 mb-3">
-    </div>
-
-    <!-- Popup Notification -->
-    <div id="popup-message" class="popup-message"></div>
-
-    <!-- Scanned Results Queue -->
-    <div id="qr-reader-results" class="card p-3 mb-3">
-    </div>
-
-    <!-- Manual Entry -->
-    <div class="card p-3 mb-4">
-      <label class="small font-weight-bold text-muted mb-1">Manual ID Entry (If QR fails):</label>
+    <!-- Manual ID Fallback Form -->
+    <div class="glass-card p-3 mb-3">
+      <label class="small font-weight-bold text-muted mb-2 text-uppercase" style="letter-spacing: 0.5px;">
+        <i class="fa-solid fa-keyboard mr-1"></i> Manual Employee ID Entry
+      </label>
       <div class="input-group">
-        <input type="text" id="manualInput" class="form-control text-uppercase" placeholder="e.g. S23302">
+        <input type="text" id="manualInput" class="form-control custom-input text-uppercase font-weight-bold" placeholder="e.g. S24890 or 24890">
         <div class="input-group-append">
-          <button class="btn btn-secondary" id="manualSubmitBtn" type="button">Submit</button>
+          <button class="btn btn-gradient" id="manualSubmitBtn" type="button">
+            <i class="fa-solid fa-paper-plane mr-1"></i> Submit
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scanned History -->
+    <div class="glass-card p-3 mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="small font-weight-bold text-muted text-uppercase" style="letter-spacing: 0.5px;">
+          <i class="fa-solid fa-clock-rotate-left mr-1"></i> Recent Scans
+        </span>
+        <button class="btn btn-link btn-sm text-muted p-0" id="clearHistoryBtn" style="font-size: 12px; text-decoration: none;">
+          Clear
+        </button>
+      </div>
+      <div id="recentScansContainer">
+        <div class="text-center text-muted py-3 small">No scans in this session yet. Ready to scan!</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Size Selection Modal -->
+  <div class="modal fade" id="sizeModal" tabindex="-1" role="dialog" data-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content dark-modal">
+        <div class="modal-header">
+          <h5 class="modal-title font-weight-bold">
+            <i class="fa-solid fa-shirt text-primary mr-2"></i>Select Uniform Size
+          </h5>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-2">
+            No size found in sheet for Employee: <strong id="modalEmpIdDisplay" class="text-white"></strong>
+          </p>
+          
+          <label class="small font-weight-bold text-muted text-uppercase">Quick Select Size:</label>
+          <div class="size-pill-grid">
+            <button type="button" class="size-pill-btn" onclick="selectQuickSize('S')">S</button>
+            <button type="button" class="size-pill-btn" onclick="selectQuickSize('M')">M</button>
+            <button type="button" class="size-pill-btn" onclick="selectQuickSize('L')">L</button>
+            <button type="button" class="size-pill-btn" onclick="selectQuickSize('XL')">XL</button>
+            <button type="button" class="size-pill-btn" onclick="selectQuickSize('2XL')">2XL</button>
+            <button type="button" class="size-pill-btn" onclick="selectQuickSize('3XL')">3XL</button>
+            <button type="button" class="size-pill-btn" onclick="selectQuickSize('4XL')">4XL</button>
+            <button type="button" class="size-pill-btn" onclick="selectQuickSize('XS')">XS</button>
+          </div>
+
+          <label class="small font-weight-bold text-muted text-uppercase">Or Type Size:</label>
+          <input type="text" id="uniformSizeInput" class="form-control custom-input text-uppercase font-weight-bold" placeholder="e.g. M or 38">
+          <input type="hidden" id="hiddenScannedCode">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary font-weight-bold" data-dismiss="modal">Cancel</button>
+          <button type="button" id="submitSizeBtn" class="btn btn-gradient font-weight-bold">Confirm & Issue</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Size Modal -->
-  <div class="modal fade" id="sizeModal" tabindex="-1" role="dialog" data-backdrop="static">
+  <!-- Settings Modal -->
+  <div class="modal fade" id="settingsModal" tabindex="-1" role="dialog">
     <div class="modal-dialog modal-dialog-centered" role="document">
-      <div class="modal-content">
+      <div class="modal-content dark-modal">
         <div class="modal-header">
-          <h5 class="modal-title font-weight-bold">Enter Uniform Size</h5>
+          <h5 class="modal-title font-weight-bold">
+            <i class="fa-solid fa-sliders text-primary mr-2"></i>System Rules & Configuration
+          </h5>
+          <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
         </div>
         <div class="modal-body">
-          <input type="text" id="uniformSizeInput" class="form-control mb-2" placeholder="Enter size (e.g. S, M, L, XL)">
-          <input type="hidden" id="hiddenScannedCode">
+          
+          <div class="form-group">
+            <label class="font-weight-bold small text-muted text-uppercase">
+              <i class="fa-solid fa-clock mr-1"></i> Uniform Waiting Period (Days)
+            </label>
+            <input type="number" id="settingWaitingDays" class="form-control custom-input" placeholder="7" min="0" step="0.5">
+            <small class="form-text text-muted">Minimum days required between uniform issues. Set to 0 to disable wait period.</small>
+          </div>
+
+          <div class="form-group mt-3">
+            <label class="font-weight-bold small text-muted text-uppercase">
+              <i class="fa-solid fa-shield-halved mr-1"></i> Max Allowed Employee ID
+            </label>
+            <input type="number" id="settingMaxEmpId" class="form-control custom-input" placeholder="25025">
+            <small class="form-text text-muted">Employees with numbers higher than this will be rejected as Not Eligible.</small>
+          </div>
+
+          <div class="form-group mt-3">
+            <label class="font-weight-bold small text-muted text-uppercase">
+              <i class="fa-solid fa-link mr-1"></i> Google Apps Script API URL
+            </label>
+            <input type="text" id="settingApiUrl" class="form-control custom-input" style="font-size: 12px;">
+          </div>
+
         </div>
         <div class="modal-footer">
-          <button type="button" id="submitSizeBtn" class="btn btn-primary font-weight-bold">Submit</button>
+          <button type="button" class="btn btn-secondary font-weight-bold" data-dismiss="modal">Close</button>
+          <button type="button" id="saveSettingsBtn" class="btn btn-gradient font-weight-bold">
+            <i class="fa-solid fa-cloud-arrow-up mr-1"></i> Save to Google Sheet
+          </button>
         </div>
       </div>
     </div>
@@ -106,18 +462,80 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
   <script>
-    // ============================================================
-    // ⬇️⬇️⬇️  CHANGE THIS TO YOUR APPS SCRIPT DEPLOYMENT URL  ⬇️⬇️⬇️
-    // ============================================================
-    var API_URL = "https://script.google.com/macros/s/AKfycbyzJ0L5d95y_3lcXRHb9JMwtyaTzqEP3OJ67ZVEUQ7Z2o-Hl1iUGJbssHf7VV0o86bY/exec";
-    // ============================================================
+    // Config: Apps Script Backend URL
+    var DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbyzJ0L5d95y_3lcXRHb9JMwtyaTzqEP3OJ67ZVEUQ7Z2o-Hl1iUGJbssHf7VV0o86bY/exec";
+    var API_URL = localStorage.getItem("UNIFORM_API_URL") || DEFAULT_API_URL;
 
-    var resultContainer, popupMessage;
-    var scannedResults = {};
-    var scanQueue = [];
     var currentRules = { waitingDays: 7, maxEmployeeId: 25025 };
+    var scanHistory = [];
+    var isProcessing = false;
 
-    // Call Apps Script API via fetch POST
+    // Web Audio Synthesizer (No external sound files required)
+    var audioCtx = null;
+    function getAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    function playSuccessChime() {
+      try {
+        var ctx = getAudioContext();
+        var osc1 = ctx.createOscillator();
+        var osc2 = ctx.createOscillator();
+        var gain = ctx.createGain();
+
+        osc1.type = 'sine';
+        osc2.type = 'triangle';
+        osc1.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+        osc1.frequency.setValueAtTime(880, ctx.currentTime + 0.12); // A5
+        osc2.frequency.setValueAtTime(440, ctx.currentTime); // A4
+        osc2.frequency.setValueAtTime(659.25, ctx.currentTime + 0.12); // E5
+
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc1.start();
+        osc2.start();
+        osc1.stop(ctx.currentTime + 0.45);
+        osc2.stop(ctx.currentTime + 0.45);
+      } catch (e) {
+        console.warn("Audio chime error:", e);
+      }
+    }
+
+    function playBuzzerTone() {
+      try {
+        var ctx = getAudioContext();
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(160, ctx.currentTime);
+        osc.frequency.setValueAtTime(130, ctx.currentTime + 0.15);
+
+        gain.gain.setValueAtTime(0.35, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start();
+        osc.stop(ctx.currentTime + 0.4);
+      } catch (e) {
+        console.warn("Buzzer error:", e);
+      }
+    }
+
+    // Call Apps Script Backend API
     function callAPI(payload) {
       return fetch(API_URL, {
         method: "POST",
@@ -127,148 +545,241 @@
       .then(function(resp) { return resp.json(); });
     }
 
-    function addScanResult(decodedText, className) {
-      scanQueue.unshift({ text: decodedText, className: className });
-      if (scanQueue.length > 5) scanQueue.pop();
-      renderScanResults();
+    // Floating Toast Notification
+    var toastTimeout = null;
+    function showToast(message, type, iconClass) {
+      var toast = document.getElementById("statusToast");
+      var text = document.getElementById("toastText");
+      var icon = document.getElementById("toastIcon");
+
+      toast.className = "status-toast toast-" + (type || "success");
+      text.textContent = message;
+      icon.className = iconClass || (type === "danger" ? "fa-solid fa-triangle-exclamation" : (type === "warning" ? "fa-solid fa-clock" : "fa-solid fa-circle-check"));
+
+      toast.classList.add("show");
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(function() {
+        toast.classList.remove("show");
+      }, 4000);
     }
 
-    function renderScanResults() {
-      resultContainer.innerHTML = '';
-      for (var i = 0; i < scanQueue.length; i++) {
-        var scan = scanQueue[i];
-        resultContainer.innerHTML += '<div class="alert ' + scan.className + ' py-2 mb-2">' + scan.text + '</div>';
-      }
+    // Add result to history list
+    function addHistoryItem(empId, statusText, type) {
+      var timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      scanHistory.unshift({ empId: empId, text: statusText, type: type, time: timeStr });
+      if (scanHistory.length > 8) scanHistory.pop();
+
+      var container = document.getElementById("recentScansContainer");
+      container.innerHTML = "";
+      scanHistory.forEach(function(item) {
+        var el = document.createElement("div");
+        el.className = "scan-history-item item-" + item.type;
+        el.innerHTML = '<div><strong>' + item.empId + '</strong> &mdash; ' + item.text + '</div><small class="text-muted">' + item.time + '</small>';
+        container.appendChild(el);
+      });
     }
 
+    // Extract digits to check employee number
     function extractNumericId(str) {
       var digits = String(str).replace(/\D/g, '');
       return digits ? parseInt(digits, 10) : 0;
     }
 
-    function checkSizeAndProceed(decodedText) {
-      callAPI({ action: "getSizeForEmployee", employeeId: decodedText })
-        .then(function(data) {
-          if (data.size) {
-            addScanResult(decodedText, 'scan-success');
-            saveScannedData(decodedText, data.size);
-          } else {
-            document.getElementById("hiddenScannedCode").value = decodedText;
-            document.getElementById("uniformSizeInput").value = "";
-            $('#sizeModal').modal('show');
-          }
-        })
-        .catch(function(err) {
-          showMessage("API Error: " + err.message);
-        });
+    // Quick size button click helper
+    function selectQuickSize(size) {
+      document.getElementById("uniformSizeInput").value = size;
+      document.querySelectorAll(".size-pill-btn").forEach(function(btn) {
+        btn.classList.toggle("active", btn.textContent === size);
+      });
     }
 
+    // Main QR scan callback
     function onScanSuccess(decodedText) {
+      if (isProcessing) return;
       var cleanCode = String(decodedText).trim().toUpperCase();
+      if (!cleanCode) return;
 
-      // Max Employee ID check
-      if (currentRules.maxEmployeeId > 0) {
+      isProcessing = true;
+      getAudioContext(); // Resume audio on first user scan gesture
+
+      // Rule Check: Max Employee ID Limit
+      if (currentRules.maxEmployeeId && currentRules.maxEmployeeId > 0) {
         var num = extractNumericId(cleanCode);
         if (num > currentRules.maxEmployeeId) {
-          showMessage("Not Eligible! Employee ID " + cleanCode + " exceeds limit (" + currentRules.maxEmployeeId + ").");
-          addScanResult(cleanCode + " - Not Eligible", 'scan-danger');
+          playBuzzerTone();
+          showToast("Not Eligible! ID " + cleanCode + " exceeds limit (" + currentRules.maxEmployeeId + ")", "danger", "fa-solid fa-ban");
+          addHistoryItem(cleanCode, "Not Eligible (Exceeds Max ID: " + currentRules.maxEmployeeId + ")", "danger");
+          setTimeout(function() { isProcessing = false; }, 2000);
           return;
         }
       }
 
-      if (!scannedResults.hasOwnProperty(cleanCode)) {
-        scannedResults[cleanCode] = 1;
-        checkSizeAndProceed(cleanCode);
-      } else {
-        scannedResults[cleanCode]++;
-        checkSizeAndProceed(cleanCode);
-      }
-    }
-
-    function saveScannedData(scannedText, size) {
-      var formObject = { productCode: scannedText, size: size };
-
-      callAPI({ action: "processForm", formObject: formObject })
+      // Query size from Google Sheet
+      callAPI({ action: "getSizeForEmployee", employeeId: cleanCode })
         .then(function(data) {
-          var response = data.result;
-          if (response === "BlockedFromSecondUniform") {
-            showMessage("You have already received your first uniform. You can get your second uniform after the waiting period.");
-          } else if (response === "BlockedFromThirdUniform") {
-            showMessage("You have already received your second uniform. You can get your third uniform after the waiting period.");
-          } else if (response === "FirstUniformGiven") {
-            showMessage("This is your 1st uniform.");
-          } else if (response === "SecondUniformGiven") {
-            showMessage("This is your 2nd uniform.");
-          } else if (response === "ThirdUniformGiven") {
-            showMessage("You have received your 3rd uniform.");
-          } else if (response === "AllUniformsReceived") {
-            showMessage("You have already received all uniforms.");
-          } else if (response === "NotEligible") {
-            showMessage("Not Eligible! Employee ID exceeds limit.");
+          if (data && data.size) {
+            saveScannedData(cleanCode, data.size);
           } else {
-            showMessage(response || "Error processing form.");
+            // Need to ask size
+            document.getElementById("hiddenScannedCode").value = cleanCode;
+            document.getElementById("modalEmpIdDisplay").textContent = cleanCode;
+            document.getElementById("uniformSizeInput").value = "";
+            document.querySelectorAll(".size-pill-btn").forEach(function(btn) { btn.classList.remove("active"); });
+            $('#sizeModal').modal('show');
           }
         })
         .catch(function(err) {
-          showMessage("API Error: " + err.message);
+          showToast("Connection Error: " + err.message, "danger");
+          setTimeout(function() { isProcessing = false; }, 2000);
         });
     }
 
-    function showMessage(message) {
-      popupMessage.textContent = message;
-      popupMessage.style.display = 'block';
-      setTimeout(function() {
-        popupMessage.style.display = 'none';
-      }, 3500);
+    // Save issue to Google Sheet
+    function saveScannedData(scannedText, size) {
+      callAPI({ action: "processForm", formObject: { productCode: scannedText, size: size } })
+        .then(function(data) {
+          var response = data.result;
+          if (response === "FirstUniformGiven") {
+            playSuccessChime();
+            showToast(scannedText + " - 1st Uniform Issued (" + size + ")", "success");
+            addHistoryItem(scannedText, "1st Uniform Issued (Size: " + size + ")", "success");
+          } else if (response === "SecondUniformGiven") {
+            playSuccessChime();
+            showToast(scannedText + " - 2nd Uniform Issued", "success");
+            addHistoryItem(scannedText, "2nd Uniform Issued", "success");
+          } else if (response === "ThirdUniformGiven") {
+            playSuccessChime();
+            showToast(scannedText + " - 3rd Uniform Issued", "success");
+            addHistoryItem(scannedText, "3rd Uniform Issued", "success");
+          } else if (response === "BlockedFromSecondUniform") {
+            playBuzzerTone();
+            showToast(scannedText + " - Already got 1st! Wait period not reached.", "warning");
+            addHistoryItem(scannedText, "Blocked - Waiting period active", "warning");
+          } else if (response === "BlockedFromThirdUniform") {
+            playBuzzerTone();
+            showToast(scannedText + " - Already got 2nd! Wait period not reached.", "warning");
+            addHistoryItem(scannedText, "Blocked - Waiting period active", "warning");
+          } else if (response === "AllUniformsReceived") {
+            playBuzzerTone();
+            showToast(scannedText + " - All uniforms already received!", "warning");
+            addHistoryItem(scannedText, "Already received all uniforms", "warning");
+          } else if (response === "NotEligible") {
+            playBuzzerTone();
+            showToast(scannedText + " - Not Eligible (Exceeds Limit)", "danger");
+            addHistoryItem(scannedText, "Not Eligible", "danger");
+          } else {
+            showToast(response || "Error processing", "warning");
+            addHistoryItem(scannedText, response, "warning");
+          }
+        })
+        .catch(function(err) {
+          showToast("Error: " + err.message, "danger");
+        })
+        .finally(function() {
+          setTimeout(function() { isProcessing = false; }, 1500);
+        });
     }
 
-    document.addEventListener('DOMContentLoaded', function() {
-      resultContainer = document.getElementById('qr-reader-results');
-      popupMessage = document.getElementById('popup-message');
+    // Refresh Settings from Backend
+    function refreshSettingsUI() {
+      document.getElementById("maxIdBadge").innerHTML = '<i class="fa-solid fa-shield-halved"></i> Max ID: <strong>' + currentRules.maxEmployeeId + '</strong>';
+      document.getElementById("waitDaysBadge").innerHTML = '<i class="fa-solid fa-clock"></i> Wait: <strong>' + currentRules.waitingDays + ' Days</strong>';
+      document.getElementById("settingWaitingDays").value = currentRules.waitingDays;
+      document.getElementById("settingMaxEmpId").value = currentRules.maxEmployeeId;
+      document.getElementById("settingApiUrl").value = API_URL;
+    }
 
-      // Check API URL
-      if (!API_URL || API_URL === "PASTE_YOUR_APPS_SCRIPT_URL_HERE") {
-        document.getElementById("setupBanner").style.display = "block";
-      }
+    function loadSettingsFromBackend() {
+      callAPI({ action: "getSettings" })
+        .then(function(data) {
+          if (data && data.waitingDays !== undefined) {
+            currentRules = data;
+            refreshSettingsUI();
+          }
+        })
+        .catch(function(err) {
+          console.warn("Could not fetch remote settings:", err);
+          refreshSettingsUI();
+        });
+    }
 
-      // Load settings from backend
-      if (API_URL && API_URL !== "PASTE_YOUR_APPS_SCRIPT_URL_HERE") {
-        callAPI({ action: "getSettings" })
-          .then(function(data) {
-            if (data && data.waitingDays !== undefined) {
-              currentRules = data;
-            }
+    // DOM Ready Initialization
+    document.addEventListener("DOMContentLoaded", function() {
+      refreshSettingsUI();
+      loadSettingsFromBackend();
+
+      // Initialize HTML5 QR Scanner
+      var html5QrcodeScanner = new Html5QrcodeScanner("qr-reader", {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        aspectRatio: 1.0,
+        showTorchButtonIfSupported: true
+      });
+      html5QrcodeScanner.render(onScanSuccess, function(err) { /* silent frame error */ });
+
+      // Settings Modal Open
+      document.getElementById("openSettingsBtn").addEventListener("click", function() {
+        document.getElementById("settingWaitingDays").value = currentRules.waitingDays;
+        document.getElementById("settingMaxEmpId").value = currentRules.maxEmployeeId;
+        document.getElementById("settingApiUrl").value = API_URL;
+        $('#settingsModal').modal('show');
+      });
+
+      // Save Settings Click
+      document.getElementById("saveSettingsBtn").addEventListener("click", function() {
+        var wait = parseFloat(document.getElementById("settingWaitingDays").value) || 0;
+        var maxId = parseInt(document.getElementById("settingMaxEmpId").value, 10) || 0;
+        var newUrl = document.getElementById("settingApiUrl").value.trim();
+
+        if (newUrl) {
+          API_URL = newUrl;
+          localStorage.setItem("UNIFORM_API_URL", API_URL);
+        }
+
+        callAPI({ action: "saveSettings", waitingDays: wait, maxEmployeeId: maxId })
+          .then(function() {
+            currentRules.waitingDays = wait;
+            currentRules.maxEmployeeId = maxId;
+            refreshSettingsUI();
+            $('#settingsModal').modal('hide');
+            showToast("Settings saved to Google Sheet!", "success");
           })
           .catch(function(err) {
-            console.warn("Failed to load settings:", err);
+            showToast("Failed to save settings: " + err.message, "danger");
           });
-      }
-
-      // Original exact scanner - renders its own camera selection UI
-      var html5QrcodeScanner = new Html5QrcodeScanner(
-        "qr-reader", { fps: 10, qrbox: 250 });
-
-      html5QrcodeScanner.render(onScanSuccess, function(err) {
-        // scan frame error - normal
       });
 
-      // Submit size from modal
-      document.getElementById("submitSizeBtn").addEventListener("click", function () {
+      // Size Modal Submit Click
+      document.getElementById("submitSizeBtn").addEventListener("click", function() {
         var size = document.getElementById("uniformSizeInput").value.trim();
-        var scannedCode = document.getElementById("hiddenScannedCode").value;
-        if (!size) { alert("Please enter a size."); return; }
+        var code = document.getElementById("hiddenScannedCode").value;
+        if (!size) {
+          alert("Please select or enter a size!");
+          return;
+        }
         $('#sizeModal').modal('hide');
-        addScanResult(scannedCode, 'scan-success');
-        saveScannedData(scannedCode, size);
+        saveScannedData(code, size);
       });
 
-      // Manual input
+      // Manual Entry Submit
       document.getElementById("manualSubmitBtn").addEventListener("click", function() {
         var val = document.getElementById("manualInput").value.trim();
-        if (val) { onScanSuccess(val); document.getElementById("manualInput").value = ""; }
+        if (val) {
+          document.getElementById("manualInput").value = "";
+          onScanSuccess(val);
+        }
       });
+
       document.getElementById("manualInput").addEventListener("keypress", function(e) {
-        if (e.key === "Enter") document.getElementById("manualSubmitBtn").click();
+        if (e.key === "Enter") {
+          document.getElementById("manualSubmitBtn").click();
+        }
+      });
+
+      // Clear History
+      document.getElementById("clearHistoryBtn").addEventListener("click", function() {
+        scanHistory = [];
+        document.getElementById("recentScansContainer").innerHTML = '<div class="text-center text-muted py-3 small">History cleared.</div>';
       });
     });
   </script>
