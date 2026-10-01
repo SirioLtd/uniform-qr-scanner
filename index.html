@@ -232,7 +232,7 @@
 
       showMsg("Processing " + code + "...", 1500);
 
-      // Max ID check
+      // Client-side Max ID check (instant, no API call needed)
       if (rules.maxEmployeeId > 0 && extractNum(code) > rules.maxEmployeeId) {
         showMsg("Not Eligible! " + code + " exceeds limit (" + rules.maxEmployeeId + ")");
         addToHistory(code, "Not Eligible", "scan-danger");
@@ -240,63 +240,56 @@
         return;
       }
 
-      // Check size cache first
-      if (sizeCache[code]) {
-        saveToSheet(code, sizeCache[code]);
-        return;
-      }
-
-      // Ask backend for size
-      api({ action: "getSizeForEmployee", employeeId: code })
+      // SINGLE API call: scanEmployee does size check + uniform issuance in ONE request
+      var cachedSize = sizeCache[code] || "";
+      api({ action: "scanEmployee", employeeId: code, size: cachedSize })
         .then(function(d) {
-          if (d && d.size) {
-            sizeCache[code] = d.size;
-            saveToSheet(code, d.size);
-          } else {
-            // Show size modal
+          if (d.error) {
+            showMsg("Error: " + d.error);
+            addToHistory(code, d.error, "scan-danger");
+            setTimeout(resetBusy, 800);
+            return;
+          }
+
+          // Backend says it needs a size (not in sheet, not cached)
+          if (d.needSize) {
             document.getElementById("hiddenCode").value = code;
             document.getElementById("modalEmpId").textContent = code;
             document.getElementById("sizeInput").value = "";
             var btns = document.querySelectorAll(".size-btn");
             for (var i = 0; i < btns.length; i++) btns[i].classList.remove("active");
             $("#sizeModal").modal("show");
+            return;
           }
+
+          // Cache the size for future scans
+          if (d.size) sizeCache[code] = d.size;
+
+          // Handle result
+          handleResult(code, d.result, d.size || "");
+          setTimeout(resetBusy, 600);
         })
         .catch(function(e) {
           showMsg("Connection Error: " + e.message);
-          addToHistory(code, "Error: " + e.message, "scan-danger");
+          addToHistory(code, "Error", "scan-danger");
           setTimeout(resetBusy, 800);
         });
     }
 
-    function saveToSheet(code, size) {
-      api({ action: "processForm", formObject: { productCode: code, size: size } })
+    // Called when size modal submits — sends scanEmployee with the chosen size
+    function submitWithSize(code, size) {
+      showMsg("Processing " + code + "...", 1500);
+      busy = true;
+      sizeCache[code] = size;
+
+      api({ action: "scanEmployee", employeeId: code, size: size })
         .then(function(d) {
-          var r = d.result;
-          if (r === "FirstUniformGiven") {
-            showMsg(code + " - 1st Uniform Issued (" + size + ")");
-            addToHistory(code, "1st Uniform (" + size + ")", "scan-success");
-          } else if (r === "SecondUniformGiven") {
-            showMsg(code + " - 2nd Uniform Issued");
-            addToHistory(code, "2nd Uniform", "scan-success");
-          } else if (r === "ThirdUniformGiven") {
-            showMsg(code + " - 3rd Uniform Issued");
-            addToHistory(code, "3rd Uniform", "scan-success");
-          } else if (r === "BlockedFromSecondUniform") {
-            showMsg(code + " - Wait period not reached for 2nd uniform");
-            addToHistory(code, "Blocked (wait period)", "scan-warning");
-          } else if (r === "BlockedFromThirdUniform") {
-            showMsg(code + " - Wait period not reached for 3rd uniform");
-            addToHistory(code, "Blocked (wait period)", "scan-warning");
-          } else if (r === "AllUniformsReceived") {
-            showMsg(code + " - Already received all uniforms!");
-            addToHistory(code, "All received", "scan-warning");
-          } else if (r === "NotEligible") {
-            showMsg(code + " - Not Eligible");
-            addToHistory(code, "Not Eligible", "scan-danger");
+          if (d.error) {
+            showMsg("Error: " + d.error);
+            addToHistory(code, d.error, "scan-danger");
           } else {
-            showMsg(r || "Error");
-            addToHistory(code, r || "Unknown", "scan-warning");
+            if (d.size) sizeCache[code] = d.size;
+            handleResult(code, d.result, d.size || size);
           }
         })
         .catch(function(e) {
@@ -306,6 +299,34 @@
         .finally(function() {
           setTimeout(resetBusy, 600);
         });
+    }
+
+    function handleResult(code, r, size) {
+      if (r === "FirstUniformGiven") {
+        showMsg(code + " - 1st Uniform Issued (" + size + ")");
+        addToHistory(code, "1st Uniform (" + size + ")", "scan-success");
+      } else if (r === "SecondUniformGiven") {
+        showMsg(code + " - 2nd Uniform Issued");
+        addToHistory(code, "2nd Uniform", "scan-success");
+      } else if (r === "ThirdUniformGiven") {
+        showMsg(code + " - 3rd Uniform Issued");
+        addToHistory(code, "3rd Uniform", "scan-success");
+      } else if (r === "BlockedFromSecondUniform") {
+        showMsg(code + " - Wait period not reached for 2nd uniform");
+        addToHistory(code, "Blocked (wait period)", "scan-warning");
+      } else if (r === "BlockedFromThirdUniform") {
+        showMsg(code + " - Wait period not reached for 3rd uniform");
+        addToHistory(code, "Blocked (wait period)", "scan-warning");
+      } else if (r === "AllUniformsReceived") {
+        showMsg(code + " - Already received all uniforms!");
+        addToHistory(code, "All received", "scan-warning");
+      } else if (r === "NotEligible") {
+        showMsg(code + " - Not Eligible");
+        addToHistory(code, "Not Eligible", "scan-danger");
+      } else {
+        showMsg(r || "Error");
+        addToHistory(code, r || "Unknown", "scan-warning");
+      }
     }
 
     function updateBadges() {
@@ -357,7 +378,7 @@
         var c = document.getElementById("hiddenCode").value;
         if (!s) { alert("Please select or enter a size!"); return; }
         $("#sizeModal").modal("hide");
-        saveToSheet(c, s);
+        submitWithSize(c, s);
       });
 
       // --- Size Modal Cancel: MUST reset busy flag ---
